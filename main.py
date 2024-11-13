@@ -2,7 +2,7 @@ from PIL import Image
 import numpy as np
 from matplotlib import pyplot
 from matplotlib.patches import Rectangle
-
+import utils
 
 def readImage(path: str) -> np.ndarray:
     image = Image.open(path)
@@ -260,6 +260,21 @@ def getComponents(image: np.ndarray, boxes: list) -> list:
         components.append(component)
     return components
 
+def shrinkImage(image:np.ndarray, factor:int) -> np.ndarray:
+    height, width = image.shape[:2]
+    new_height = height // factor
+    new_width = width // factor
+    new_image = createCanvas(new_height, new_width)
+
+    for h in range(new_height):
+        for w in range(new_width):
+            window = image[h*factor:(h+1)*factor, w*factor:(w+1)*factor]
+            if np.any(window == 255):
+                new_image[h, w] = 255
+            else:
+                new_image[h, w] = 0
+
+    return new_image
 
 kernel = [
     [0, 1, 1, 1, 0],
@@ -274,13 +289,17 @@ image = rgbToGreyscale(image)
 image = stretchContrast(image)
 image = meanFilter(image)
 image = adaptiveThreshold(image)
-# image = dilation(image, kernel)
+image = dilation(image, kernel)
+image = shrinkImage(image, 2)
 image = erosion(image, kernel)
 boxes = connectedComponents(image)
 
 boxes.sort(key=lambda x: x[0])  # Order boxes by min_x
 
 components = getComponents(image, boxes)
+templates = utils.TEMPLATES
 showImage(image, boxes)
 # for component in components:
 #     showImage(component)
+
+# TODO: enlarge the template to match the size of the component, if the template completely captures the component, then it is a match
