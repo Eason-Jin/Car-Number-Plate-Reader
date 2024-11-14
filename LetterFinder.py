@@ -2,7 +2,8 @@ from PIL import Image
 import numpy as np
 from matplotlib import pyplot
 from matplotlib.patches import Rectangle
-import utils
+import Utils
+
 
 def readImage(path: str) -> np.ndarray:
     image = Image.open(path)
@@ -32,7 +33,7 @@ def showImage(image: np.ndarray, boxes=None) -> None:
                 facecolor="none",
             )
             axs.add_patch(rect)
-    pyplot.axis("off")
+    # pyplot.axis("off")
     pyplot.tight_layout()
     pyplot.imshow(image, cmap="gray", aspect="equal")
     pyplot.show()
@@ -143,10 +144,11 @@ def adaptiveThreshold(image: np.ndarray) -> np.ndarray:
     return thresh
 
 
-def dilation(image: np.ndarray, kernel: list) -> np.ndarray:
+def dilation(image: np.ndarray) -> np.ndarray:
+    global kernel
     height, width = image.shape
-    kernel = np.array(kernel)
-    kernel_half = len(kernel) // 2
+    k = np.array(kernel)
+    kernel_half = len(k) // 2
 
     # Create a padded version of the image to handle borders
     padded_image = np.pad(image, kernel_half,
@@ -156,7 +158,7 @@ def dilation(image: np.ndarray, kernel: list) -> np.ndarray:
     # Apply the kernel on each pixel
     for i in range(-kernel_half, kernel_half + 1):
         for j in range(-kernel_half, kernel_half + 1):
-            if kernel[i + kernel_half, j + kernel_half] == 1:
+            if k[i + kernel_half, j + kernel_half] == 1:
                 # Shift the padded image and apply maximum where kernel is 1
                 result = np.maximum(
                     result, padded_image[kernel_half + i:kernel_half + i + height, kernel_half + j:kernel_half + j + width])
@@ -164,10 +166,11 @@ def dilation(image: np.ndarray, kernel: list) -> np.ndarray:
     return result
 
 
-def erosion(image: np.ndarray, kernel: list) -> np.ndarray:
+def erosion(image: np.ndarray) -> np.ndarray:
+    global kernel
     height, width = image.shape
-    kernel = np.array(kernel)
-    kernel_half = len(kernel) // 2
+    k = np.array(kernel)
+    kernel_half = len(k) // 2
 
     # Create a padded version of the image to handle borders
     padded_image = np.pad(image, kernel_half,
@@ -177,7 +180,7 @@ def erosion(image: np.ndarray, kernel: list) -> np.ndarray:
     # Apply the kernel on each pixel
     for i in range(-kernel_half, kernel_half + 1):
         for j in range(-kernel_half, kernel_half + 1):
-            if kernel[i + kernel_half, j + kernel_half] == 1:
+            if k[i + kernel_half, j + kernel_half] == 1:
                 # Shift the padded image and apply minimum where kernel is 1
                 result = np.minimum(
                     result, padded_image[kernel_half + i:kernel_half + i + height, kernel_half + j:kernel_half + j + width])
@@ -238,8 +241,6 @@ def connectedComponents(image: np.ndarray) -> list:
                     except IndexError:
                         pass
 
-                components.append((min_x, min_y, max_x, max_y))
-
                 diameter_x = max_x-min_x
                 diameter_y = max_y-min_y
                 # Minimum size threshold to filter out little noise
@@ -260,7 +261,8 @@ def getComponents(image: np.ndarray, boxes: list) -> list:
         components.append(component)
     return components
 
-def shrinkImage(image:np.ndarray, factor:int) -> np.ndarray:
+
+def shrinkImage(image: np.ndarray, factor: int) -> np.ndarray:
     height, width = image.shape[:2]
     new_height = height // factor
     new_width = width // factor
@@ -276,30 +278,73 @@ def shrinkImage(image:np.ndarray, factor:int) -> np.ndarray:
 
     return new_image
 
-kernel = [
-    [0, 1, 1, 1, 0],
-    [1, 1, 1, 1, 1],
-    [1, 1, 1, 1, 1],
-    [1, 1, 1, 1, 1],
-    [0, 1, 1, 1, 0]
-]
 
-image = readImage("test.jpg")
-image = rgbToGreyscale(image)
-image = stretchContrast(image)
-image = meanFilter(image)
-image = adaptiveThreshold(image)
-image = dilation(image, kernel)
-image = shrinkImage(image, 2)
-image = erosion(image, kernel)
-boxes = connectedComponents(image)
+def matchLetter(component: np.ndarray) -> list:
+    global templates
+    height, width = component.shape
+    results = []
+    for letter, bitmap in templates.items():
+        tHeight, tWidth = len(bitmap), len(bitmap[0])
+        largeT = enlarge(bitmap, height//tHeight+1, width//tWidth+1)
+        # Note that the largeT is larger than the component
+        totalCount = 0
+        matchCount = 0
+        for row in range(height):
+            for col in range(width):
+                if component[row, col] != 0:
+                    totalCount += 1
+                    if largeT[row][col] != 0:
+                        matchCount += 1
+        matchRate = matchCount/totalCount
+        # print(f"{letter}: {matchRate}", end="\t")
+        results.append((letter, matchRate))
+    # Sort the results by matchRate and take the first 3
+    results.sort(key=lambda x: x[1], reverse=True)
+    print(results[:3])
+    return results[:3]
 
-boxes.sort(key=lambda x: x[0])  # Order boxes by min_x
 
-components = getComponents(image, boxes)
-templates = utils.TEMPLATES
-showImage(image, boxes)
-# for component in components:
-#     showImage(component)
+def enlarge(template: list, heightFactor: int, widthFactor: int) -> list:
+    enlarged = []
+    for row in template:
+        # Expand each element horizontally by widthFactor
+        enlarged_row = []
+        for item in row:
+            enlarged_row.extend([item] * widthFactor)
+        # Expand each row vertically by heightFactor
+        for _ in range(heightFactor):
+            enlarged.append(enlarged_row.copy())
+    return enlarged
 
-# TODO: enlarge the template to match the size of the component, if the template completely captures the component, then it is a match
+
+def getLetters():
+    global kernel
+    kernel = [
+        [0, 1, 1, 1, 0],
+        [1, 1, 1, 1, 1],
+        [1, 1, 1, 1, 1],
+        [1, 1, 1, 1, 1],
+        [0, 1, 1, 1, 0]
+    ]
+    global templates
+    templates = Utils.TEMPLATES
+
+    image = readImage("test.jpg")
+    image = rgbToGreyscale(image)
+    image = stretchContrast(image)
+    image = meanFilter(image)
+    image = adaptiveThreshold(image)
+    image = dilation(image)
+    image = shrinkImage(image, 3)
+    image = erosion(image)
+    boxes = connectedComponents(image)
+
+    boxes.sort(key=lambda x: x[0])  # Order boxes by min_x
+    components = getComponents(image, boxes)
+    for component in components:
+        matchLetter(component)
+    showImage(image, boxes)
+
+
+if __name__ == "__main__":
+    getLetters()
