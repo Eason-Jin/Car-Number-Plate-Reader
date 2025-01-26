@@ -33,7 +33,6 @@ def showImage(image: np.ndarray, boxes=None) -> None:
                 facecolor="none",
             )
             axs.add_patch(rect)
-    # pyplot.axis("off")
     pyplot.tight_layout()
     pyplot.imshow(image, cmap="gray", aspect="equal")
     pyplot.show()
@@ -48,10 +47,11 @@ def rgbToGreyscale(image: np.ndarray) -> np.ndarray:
     greyscale = createCanvas(height, width)
     for h in range(height):
         for w in range(width):
-            greyscale[h, w] = image[h, w, 0] * 0.2989 + \
-                image[h, w, 1] * 0.5870 + image[h, w, 2] * 0.1140
+           greyscale[h, w] = image[h, w, 0] * 0.299 + \
+                image[h, w, 1] * 0.587 + image[h, w, 2] * 0.114
     return greyscale
-    # return np.dot(image[...,:3], [0.2989, 0.5870, 0.1140])
+    # numpy version
+    # return np.dot(image[..., :3], [0.299, 0.587, 0.114])
 
 
 def stretchContrast(image: np.ndarray) -> np.ndarray:
@@ -81,7 +81,7 @@ def meanFilter(image: np.ndarray) -> np.ndarray:
             for i in range(-window_half, window_half+1):
                 for j in range(-window_half, window_half+1):
                     result += image[row + i, col + j]
-            filtered[row, col] = abs(float(result / 25))
+            filtered[row, col] = abs(float(result / WINDOW_SIZE**2))
 
     return filtered
 
@@ -244,7 +244,7 @@ def connectedComponents(image: np.ndarray) -> list:
                 diameter_x = max_x-min_x
                 diameter_y = max_y-min_y
                 # Minimum size threshold to filter out little noise
-                threshold_size = 20
+                threshold_size = 10
                 if diameter_x < threshold_size and diameter_y < threshold_size:
                     pass
                 else:
@@ -261,6 +261,7 @@ def getComponents(image: np.ndarray, boxes: list) -> list:
         if len(component) != 0:
             components.append(component)
     return components
+
 
 def initDB():
     image = readImage("letters.png")
@@ -295,7 +296,8 @@ def initDB():
 
     # showImage(image, boxes)
 
-def resize_bitmap(bitmap: np.ndarray, new_height: int, new_width: int) -> np.ndarray:
+
+def resizeImage(bitmap: np.ndarray, new_height: int, new_width: int) -> np.ndarray:
     """
     Resize a bitmap to a new size using nearest neighbor interpolation.
     """
@@ -308,7 +310,8 @@ def resize_bitmap(bitmap: np.ndarray, new_height: int, new_width: int) -> np.nda
             resized_bitmap[i, j] = bitmap[old_i, old_j]
     return resized_bitmap
 
-def compute_ssim(bitmap1: np.ndarray, bitmap2: np.ndarray) -> float:
+
+def computeSSIM(bitmap1: np.ndarray, bitmap2: np.ndarray) -> float:
     """
     Compute the Structural Similarity Index (SSIM) between two bitmaps.
     """
@@ -318,13 +321,15 @@ def compute_ssim(bitmap1: np.ndarray, bitmap2: np.ndarray) -> float:
     c1, c2 = 0.01**2, 0.03**2
     return ((2 * mean1 * mean2 + c1) * (2 * cov + c2)) / ((mean1**2 + mean2**2 + c1) * (var1 + var2 + c2))
 
-def compare_bitmaps(bitmap1: np.ndarray, bitmap2: list) -> float:
+
+def compareImages(bitmap1: np.ndarray, bitmap2: list) -> float:
     """
     Compare two bitmaps of different sizes using Structural Similarity Index (SSIM) without external libraries.
     """
     bitmap2 = np.asarray(bitmap2, dtype=np.uint8)
-    resized_bitmap2 = resize_bitmap(bitmap2, bitmap1.shape[0], bitmap1.shape[1])
-    return compute_ssim(bitmap1, resized_bitmap2)
+    resized_bitmap2 = resizeImage(
+        bitmap2, bitmap1.shape[0], bitmap1.shape[1])
+    return computeSSIM(bitmap1, resized_bitmap2)
 
 
 def matchLetter(component: np.ndarray) -> list:
@@ -332,8 +337,9 @@ def matchLetter(component: np.ndarray) -> list:
     height, width = component.shape
     results = []
     for letter, bitmap in templates.items():
-        matchRate = compare_bitmaps(component, bitmap)
-        results.append((letter, round(matchRate*1000000, 2)))   # Wow magic number 😲
+        matchRate = compareImages(component, bitmap)
+        # Wow magic number 😲
+        results.append((letter, round(matchRate*1000000, 2)))
     # Sort the results by matchRate and take the first 2
     results.sort(key=lambda x: x[1], reverse=True)
     print(results[:3])
@@ -352,7 +358,7 @@ if __name__ == "__main__":
     ]
     # templates, width, height = templateSize()
     templates = Utils.TEMPLATES
-    image = readImage("images/8.jpg")
+    image = readImage("images/3.jpg")
     image = rgbToGreyscale(image)
     image = stretchContrast(image)
     image = meanFilter(image)
