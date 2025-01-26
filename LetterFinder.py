@@ -244,12 +244,12 @@ def connectedComponents(image: np.ndarray) -> list:
                 diameter_x = max_x-min_x
                 diameter_y = max_y-min_y
                 # Minimum size threshold to filter out little noise
-                threshold_size = 8
+                threshold_size = 20
                 if diameter_x < threshold_size and diameter_y < threshold_size:
                     pass
                 else:
                     components.append((min_x, min_y, max_x, max_y))
-
+    components.sort(key=lambda x: x[0])  # Order boxes by min_x
     return components
 
 
@@ -258,25 +258,73 @@ def getComponents(image: np.ndarray, boxes: list) -> list:
     for box in boxes:
         min_x, min_y, max_x, max_y = box
         component = image[min_y:max_y, min_x:max_x]
-        components.append(component)
+        if len(component) != 0:
+            components.append(component)
     return components
 
+def initDB():
+    image = readImage("letters.png")
+    image = rgbToGreyscale(image)
+    image = stretchContrast(image)
+    image = meanFilter(image)
+    image = adaptiveThreshold(image)
+    image = dilation(image)
+    image = erosion(image)
+    boxes = connectedComponents(image)
 
-def shrinkImage(image: np.ndarray, factor: int) -> np.ndarray:
-    height, width = image.shape[:2]
-    new_height = height // factor
-    new_width = width // factor
-    new_image = createCanvas(new_height, new_width)
+    # boxes.sort(key=lambda x: x[0])  # Order boxes by min_x
+    components = getComponents(image, boxes)
+    for component in components:
+        # Create a bit map for each of the components and write to bitmap.txt
+        bitmap = "["
+        for i in range(len(component)):
+            for j in range(len(component[i])):
+                if j == 0:
+                    bitmap += "["
+                bitmap += "1" if component[i][j] == 255 else "0"
+                if j < len(component[i]) - 1:
+                    bitmap += ", "
+                else:
+                    bitmap += "]"
+                    if i < len(component) - 1:
+                        bitmap += ","
+                    bitmap += "\n"
+        with open("bitmap.txt", "a") as f:
+            f.write(bitmap + "]")
+            f.write("\n")
 
-    for h in range(new_height):
-        for w in range(new_width):
-            window = image[h*factor:(h+1)*factor, w*factor:(w+1)*factor]
-            if np.any(window == 255):
-                new_image[h, w] = 255
-            else:
-                new_image[h, w] = 0
+    # showImage(image, boxes)
 
-    return new_image
+def resize_bitmap(bitmap: np.ndarray, new_height: int, new_width: int) -> np.ndarray:
+    """
+    Resize a bitmap to a new size using nearest neighbor interpolation.
+    """
+    old_height, old_width = bitmap.shape
+    resized_bitmap = np.zeros((new_height, new_width), dtype=bitmap.dtype)
+    for i in range(new_height):
+        for j in range(new_width):
+            old_i = int(i * old_height / new_height)
+            old_j = int(j * old_width / new_width)
+            resized_bitmap[i, j] = bitmap[old_i, old_j]
+    return resized_bitmap
+
+def compute_ssim(bitmap1: np.ndarray, bitmap2: np.ndarray) -> float:
+    """
+    Compute the Structural Similarity Index (SSIM) between two bitmaps.
+    """
+    mean1, mean2 = np.mean(bitmap1), np.mean(bitmap2)
+    var1, var2 = np.var(bitmap1), np.var(bitmap2)
+    cov = np.mean((bitmap1 - mean1) * (bitmap2 - mean2))
+    c1, c2 = 0.01**2, 0.03**2
+    return ((2 * mean1 * mean2 + c1) * (2 * cov + c2)) / ((mean1**2 + mean2**2 + c1) * (var1 + var2 + c2))
+
+def compare_bitmaps(bitmap1: np.ndarray, bitmap2: list) -> float:
+    """
+    Compare two bitmaps of different sizes using Structural Similarity Index (SSIM) without external libraries.
+    """
+    bitmap2 = np.asarray(bitmap2, dtype=np.uint8)
+    resized_bitmap2 = resize_bitmap(bitmap2, bitmap1.shape[0], bitmap1.shape[1])
+    return compute_ssim(bitmap1, resized_bitmap2)
 
 
 def matchLetter(component: np.ndarray) -> list:
@@ -284,40 +332,16 @@ def matchLetter(component: np.ndarray) -> list:
     height, width = component.shape
     results = []
     for letter, bitmap in templates.items():
-        tHeight, tWidth = len(bitmap), len(bitmap[0])
-        largeT = enlarge(bitmap, height//tHeight+1, width//tWidth+1)
-        # Note that the largeT is larger than the component
-        totalCount = 0
-        matchCount = 0
-        for row in range(height):
-            for col in range(width):
-                if component[row, col] != 0:
-                    totalCount += 1
-                    if largeT[row][col] != 0:
-                        matchCount += 1
-        matchRate = matchCount/totalCount
-        # print(f"{letter}: {matchRate}", end="\t")
-        results.append((letter, matchRate))
-    # Sort the results by matchRate and take the first 3
+        matchRate = compare_bitmaps(component, bitmap)
+        results.append((letter, round(matchRate*1000000, 2)))   # Wow magic number 😲
+    # Sort the results by matchRate and take the first 2
     results.sort(key=lambda x: x[1], reverse=True)
     print(results[:3])
     return results[:3]
 
 
-def enlarge(template: list, heightFactor: int, widthFactor: int) -> list:
-    enlarged = []
-    for row in template:
-        # Expand each element horizontally by widthFactor
-        enlarged_row = []
-        for item in row:
-            enlarged_row.extend([item] * widthFactor)
-        # Expand each row vertically by heightFactor
-        for _ in range(heightFactor):
-            enlarged.append(enlarged_row.copy())
-    return enlarged
-
-
-def getLetters():
+if __name__ == "__main__":
+    # initDB()
     global kernel
     kernel = [
         [0, 1, 1, 1, 0],
@@ -326,25 +350,20 @@ def getLetters():
         [1, 1, 1, 1, 1],
         [0, 1, 1, 1, 0]
     ]
-    global templates
+    # templates, width, height = templateSize()
     templates = Utils.TEMPLATES
-
-    image = readImage("test.jpg")
+    image = readImage("images/8.jpg")
     image = rgbToGreyscale(image)
     image = stretchContrast(image)
     image = meanFilter(image)
     image = adaptiveThreshold(image)
-    image = dilation(image)
-    image = shrinkImage(image, 3)
-    image = erosion(image)
+    # image = dilation(image)
+    # image = erosion(image)
     boxes = connectedComponents(image)
-
-    boxes.sort(key=lambda x: x[0])  # Order boxes by min_x
     components = getComponents(image, boxes)
     for component in components:
+        # showImage(component)
+        # print(component.shape)
         matchLetter(component)
-    showImage(image, boxes)
 
-
-if __name__ == "__main__":
-    getLetters()
+# TODO: Comment and make readable
