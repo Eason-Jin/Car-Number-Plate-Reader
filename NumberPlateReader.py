@@ -50,7 +50,6 @@ def rgbToGreyscale(image: np.ndarray) -> np.ndarray:
            greyscale[h, w] = image[h, w, 0] * 0.299 + \
                 image[h, w, 1] * 0.587 + image[h, w, 2] * 0.114
     return greyscale
-    # numpy version
     # return np.dot(image[..., :3], [0.299, 0.587, 0.114])
 
 
@@ -71,8 +70,6 @@ def meanFilter(image: np.ndarray) -> np.ndarray:
     filtered = createCanvas(height, width)
 
     WINDOW_SIZE = 3
-
-    filtered = createCanvas(height, width)
     window_half = WINDOW_SIZE // 2
 
     for row in range(window_half, height - window_half):
@@ -281,7 +278,6 @@ def initDB():
     # boxes.sort(key=lambda x: x[0])  # Order boxes by min_x
     components = getComponents(image, boxes)
     for component in components:
-        # Create a bit map for each of the components and write to bitmap.txt
         bitmap = "["
         for i in range(len(component)):
             for j in range(len(component[i])):
@@ -299,13 +295,8 @@ def initDB():
             f.write(bitmap + "]")
             f.write("\n")
 
-    # showImage(image, boxes)
-
 
 def resizeImage(bitmap: np.ndarray, new_height: int, new_width: int) -> np.ndarray:
-    """
-    Resize a bitmap to a new size using nearest neighbor interpolation.
-    """
     old_height, old_width = bitmap.shape
     resized_bitmap = np.zeros((new_height, new_width), dtype=bitmap.dtype)
     for i in range(new_height):
@@ -317,9 +308,6 @@ def resizeImage(bitmap: np.ndarray, new_height: int, new_width: int) -> np.ndarr
 
 
 def computeSSIM(bitmap1: np.ndarray, bitmap2: np.ndarray) -> float:
-    """
-    Compute the Structural Similarity Index (SSIM) between two bitmaps.
-    """
     mean1, mean2 = np.mean(bitmap1), np.mean(bitmap2)
     var1, var2 = np.var(bitmap1), np.var(bitmap2)
     cov = np.mean((bitmap1 - mean1) * (bitmap2 - mean2))
@@ -328,9 +316,6 @@ def computeSSIM(bitmap1: np.ndarray, bitmap2: np.ndarray) -> float:
 
 
 def compareImages(bitmap1: np.ndarray, bitmap2: list) -> float:
-    """
-    Compare two bitmaps of different sizes using Structural Similarity Index (SSIM) without external libraries.
-    """
     bitmap2 = np.asarray(bitmap2, dtype=np.uint8)
     resized_bitmap2 = resizeImage(
         bitmap2, bitmap1.shape[0], bitmap1.shape[1])
@@ -339,11 +324,9 @@ def compareImages(bitmap1: np.ndarray, bitmap2: list) -> float:
 
 def matchLetter(component: np.ndarray) -> list:
     global templates
-    height, width = component.shape
     results = []
     for letter, bitmap in templates.items():
         matchRate = compareImages(component, bitmap)
-        # Wow magic number 😲
         results.append((letter, round(matchRate*1000000, 2)))
     # Sort the results by matchRate and take the first 2
     results.sort(key=lambda x: x[1], reverse=True)
@@ -361,7 +344,6 @@ if __name__ == "__main__":
         [1, 1, 1, 1, 1],
         [0, 1, 1, 1, 0]
     ]
-    # templates, width, height = templateSize()
     templates = Utils.TEMPLATES
     image = readImage("images/7.jpg")
     image = rgbToGreyscale(image)
@@ -373,8 +355,4 @@ if __name__ == "__main__":
     boxes = connectedComponents(image)
     components = getComponents(image, boxes)
     for component in components:
-        # showImage(component)
-        # print(component.shape)
         matchLetter(component)
-
-# TODO: Comment and make readable
