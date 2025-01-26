@@ -358,7 +358,7 @@ if __name__ == "__main__":
     ]
     # templates, width, height = templateSize()
     templates = Utils.TEMPLATES
-    image = readImage("images/3.jpg")
+    image = readImage("images/1.jpg")
     image = rgbToGreyscale(image)
     image = stretchContrast(image)
     image = meanFilter(image)
