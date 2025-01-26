@@ -187,6 +187,11 @@ def erosion(image: np.ndarray) -> np.ndarray:
 
     return result
 
+def opening(image: np.ndarray) -> np.ndarray:
+    return dilation(erosion(image))
+
+def closing(image: np.ndarray) -> np.ndarray:
+    return erosion(dilation(image))
 
 def connectedComponents(image: np.ndarray) -> list:
     components = []
@@ -244,7 +249,7 @@ def connectedComponents(image: np.ndarray) -> list:
                 diameter_x = max_x-min_x
                 diameter_y = max_y-min_y
                 # Minimum size threshold to filter out little noise
-                threshold_size = 10
+                threshold_size = height//10
                 if diameter_x < threshold_size and diameter_y < threshold_size:
                     pass
                 else:
@@ -358,7 +363,7 @@ if __name__ == "__main__":
     ]
     # templates, width, height = templateSize()
     templates = Utils.TEMPLATES
-    image = readImage("images/1.jpg")
+    image = readImage("images/7.jpg")
     image = rgbToGreyscale(image)
     image = stretchContrast(image)
     image = meanFilter(image)
