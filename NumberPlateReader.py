@@ -47,7 +47,7 @@ def rgbToGreyscale(image: np.ndarray) -> np.ndarray:
     greyscale = createCanvas(height, width)
     for h in range(height):
         for w in range(width):
-           greyscale[h, w] = image[h, w, 0] * 0.299 + \
+            greyscale[h, w] = image[h, w, 0] * 0.299 + \
                 image[h, w, 1] * 0.587 + image[h, w, 2] * 0.114
     return greyscale
     # return np.dot(image[..., :3], [0.299, 0.587, 0.114])
@@ -184,11 +184,14 @@ def erosion(image: np.ndarray) -> np.ndarray:
 
     return result
 
+
 def opening(image: np.ndarray) -> np.ndarray:
     return dilation(erosion(image))
 
+
 def closing(image: np.ndarray) -> np.ndarray:
     return erosion(dilation(image))
+
 
 def connectedComponents(image: np.ndarray) -> list:
     components = []
@@ -327,11 +330,15 @@ def matchLetter(component: np.ndarray) -> list:
     results = []
     for letter, bitmap in templates.items():
         matchRate = compareImages(component, bitmap)
-        results.append((letter, round(matchRate*1000000, 2)))
-    # Sort the results by matchRate and take the first 2
+        results.append((letter, matchRate))
     results.sort(key=lambda x: x[1], reverse=True)
-    print(results[:3])
-    return results[:3]
+    most_confident = results[0][1]
+    new_results = []
+    for i in range(len(results)):
+        new_results.append((results[i][0], round(
+            (results[i][1] - most_confident)/most_confident, 2)))
+    print(new_results[:3])
+    return new_results[:3]
 
 
 if __name__ == "__main__":
@@ -345,9 +352,9 @@ if __name__ == "__main__":
         [0, 1, 1, 1, 0]
     ]
     templates = Utils.TEMPLATES
-    image = readImage("images/7.jpg")
+    image = readImage("images/3.jpg")
     image = rgbToGreyscale(image)
-    image = stretchContrast(image)
+    # image = stretchContrast(image)
     image = meanFilter(image)
     image = adaptiveThreshold(image)
     # image = dilation(image)
